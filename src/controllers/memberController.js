@@ -166,7 +166,7 @@ const deleteMember = async (req, res) => {
       await cloudinary.uploader.destroy(`members/${publicId}`);
     }
     
-    await member.remove();
+    await member.deleteOne();
     
     res.json({
       success: true,

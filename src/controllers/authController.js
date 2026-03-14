@@ -60,10 +60,37 @@ const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check for admin
-    const admin = await Admin.findOne({ email }).populate('club', 'name');
+    console.log('Login attempt for email:', email);
 
-    if (!admin || !(await admin.comparePassword(password))) {
+    // IMPORTANT: Select the password field explicitly
+    const admin = await Admin.findOne({ email })
+      .select('+password')  // This is crucial!
+      .populate('club', 'name');
+
+    console.log('Admin found:', admin ? 'Yes' : 'No');
+
+    if (!admin) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    console.log('Stored hashed password:', admin.password);
+
+    // Check if comparePassword method exists
+    if (typeof admin.comparePassword !== 'function') {
+      console.error('comparePassword method not found on admin object');
+      return res.status(500).json({
+        success: false,
+        message: 'Server configuration error'
+      });
+    }
+
+    const isMatch = await admin.comparePassword(password);
+    console.log('Password match:', isMatch);
+
+    if (!isMatch) {
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
@@ -81,18 +108,22 @@ const loginAdmin = async (req, res) => {
     admin.lastLogin = Date.now();
     await admin.save();
 
+    // Generate token
+    const token = generateToken(admin._id);
+
+    // Remove password from response
+    const adminResponse = admin.toObject();
+    delete adminResponse.password;
+
     res.json({
       success: true,
       data: {
-        _id: admin._id,
-        name: admin.name,
-        email: admin.email,
-        role: admin.role,
-        club: admin.club,
-        token: generateToken(admin._id)
+        ...adminResponse,
+        token
       }
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({
       success: false,
       message: error.message
